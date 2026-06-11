@@ -355,13 +355,17 @@ class _GlassCard extends StatelessWidget {
     );
   }
 }
-
-
 // ── Resume Upload card ────────────────────────────────────────────────────────
 
-class _UploadCard extends StatelessWidget {
-  const _UploadCard();
+class _UploadCard extends StatefulWidget {
+  const _UploadCard({super.key});
+  @override
+  State<_UploadCard> createState() => _UploadCardState();
+}
 
+class _UploadCardState extends State<_UploadCard> {
+  String? selectedFileName;
+  String? selectedFilePath;
   @override
   Widget build(BuildContext context) {
     return _GlassCard(
@@ -370,8 +374,11 @@ class _UploadCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.upload_file_outlined,
-                  color: AppTheme.amber, size: 20),
+              const Icon(
+                Icons.upload_file_outlined,
+                color: AppTheme.amber,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Resume',
@@ -383,8 +390,9 @@ class _UploadCard extends StatelessWidget {
               ),
             ],
           ),
+
           const SizedBox(height: 24),
-          // Drop zone — now with actual dashed border
+
           Expanded(
             child: DottedBorder(
               color: AppTheme.amber,
@@ -413,48 +421,77 @@ class _UploadCard extends StatelessWidget {
                         size: 28,
                       ),
                     ),
+
                     const SizedBox(height: 16),
+
                     Text(
-                      'Drag your resume here',
+                      selectedFileName ?? 'Drag your resume here',
                       style: GoogleFonts.inter(
                         color: AppTheme.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+
                     const SizedBox(height: 4),
+
                     Text(
-                      'PDF, DOCX, or image — up to 10MB',
+                      selectedFileName == null
+                          ? 'PDF, DOCX, or image — up to 10MB'
+                          : 'Selected: $selectedFileName',
                       style: GoogleFonts.inter(
                         color: AppTheme.textMuted,
                         fontSize: 13,
                       ),
                     ),
+
                     const SizedBox(height: 20),
+
                     SizedBox(
                       width: 140,
                       child: OutlinedButton(
                         onPressed: () async {
-                          await FilePicker.platform.pickFiles(
+                          final result =
+                              await FilePicker.platform.pickFiles(
                             type: FileType.custom,
                             allowedExtensions: [
                               'pdf',
                               'docx',
                               'jpg',
+                              'jpeg',
                               'png',
                             ],
                           );
+
+                          if (result != null) {
+                            setState(() {
+                              selectedFileName =
+                                  result.files.first.name;
+
+                              selectedFilePath =
+                                  result.files.first.path;
+                            });
+
+                            print(
+                              'Selected file: $selectedFileName',
+                            );
+                          }
                         },
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppTheme.amber,
-                          side: const BorderSide(color: AppTheme.amber),
+                          side: const BorderSide(
+                            color: AppTheme.amber,
+                          ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius:
+                                BorderRadius.circular(10),
                           ),
                         ),
                         child: Text(
                           'Browse files',
-                          style: GoogleFonts.inter(fontSize: 13),
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ),
@@ -463,38 +500,47 @@ class _UploadCard extends StatelessWidget {
               ),
             ),
           ),
+
           const SizedBox(height: 16),
-          // File type chips
+
           Row(
-            children: ['PDF', 'DOCX', 'JPG', 'PNG'].map((type) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.glassWhite,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppTheme.glassBorder),
-                  ),
-                  child: Text(
-                    type,
-                    style: GoogleFonts.inter(
-                      color: AppTheme.textMuted,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
+            children: ['PDF', 'DOCX', 'JPG', 'PNG']
+                .map(
+                  (type) => Padding(
+                    padding:
+                        const EdgeInsets.only(right: 8),
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.glassWhite,
+                        borderRadius:
+                            BorderRadius.circular(6),
+                        border: Border.all(
+                          color: AppTheme.glassBorder,
+                        ),
+                      ),
+                      child: Text(
+                        type,
+                        style: GoogleFonts.inter(
+                          color: AppTheme.textMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                )
+                .toList(),
           ),
         ],
       ),
     );
   }
 }
-
 
 // ── Job Description card ──────────────────────────────────────────────────────
 
