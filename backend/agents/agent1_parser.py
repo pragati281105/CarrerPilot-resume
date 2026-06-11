@@ -31,13 +31,15 @@ class Agent1Parser:
         jd_url: str | None = None,
         jd_text: str | None = None
     ) -> str:
-        if jd_url and jd_url.strip():
-            return await extract_jd_from_url(jd_url)
-
         if jd_text and jd_text.strip():
             return process_raw_jd(jd_text)
+        if (
+            jd_url
+            and jd_url.strip()
+            and jd_url.startswith(("http://", "https://"))):
+            return await extract_jd_from_url(jd_url)
         raise ValueError(
-            "Either jd_url or jd_text must be provided."
+            "Provide either valid jd_text or a valid jd_url."
         )
     @classmethod
     async def process(
