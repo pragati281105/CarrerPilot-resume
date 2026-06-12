@@ -2,6 +2,7 @@
 
 import uuid
 import os
+from agents.agent2_ats import Agent2ATS
 
 from fastapi import (
     APIRouter,
@@ -118,13 +119,35 @@ async def upload_resume(
 
         # Run Agent 1
 
-        result = await Agent1Parser.process(
+        agent1_result = await Agent1Parser.process(
             resume_file_path=str(file_path),
             jd_url=jd_url,
             jd_text=jd_text
         )
 
-        return result
+        agent2_result = Agent2ATS.evaluate(
+            resume_text=agent1_result["resume_text"],
+            jd_text=agent1_result["jd_text"]
+        )
+
+        return {
+            "resume_text": agent1_result["resume_text"],
+            "jd_text": agent1_result["jd_text"],
+
+            "final_score": agent2_result["final_score"],
+            "similarity_score": agent2_result["similarity_score"],
+            "penalty": agent2_result["penalty"],
+
+            "verdict": agent2_result["verdict"],
+            "recommendation": agent2_result["recommendation"],
+
+            "severity": agent2_result["severity"],
+            "match_rate": agent2_result["match_rate"],
+
+            "matched_keywords": agent2_result["matched_keywords"],
+            "missing_keywords": agent2_result["missing_keywords"],
+            "ats_issues": agent2_result["ats_issues"],
+        }
 
     except ValueError as e:
 
