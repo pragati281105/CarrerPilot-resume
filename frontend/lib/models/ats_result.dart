@@ -1,3 +1,4 @@
+//ats_resut.dart
 class ATSResult {
   final double finalScore;
   final double similarityScore;

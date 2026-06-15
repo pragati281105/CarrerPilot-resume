@@ -1,6 +1,5 @@
 // lib/screens/dashboard_screen.dart
 
-import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -16,19 +15,15 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() =>
-      _DashboardScreenState();
+  State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState
-    extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> {
+  ATSResult? atsResult;
+  PlatformFile? selectedFile; // ← changed from File to PlatformFile
+  bool isLoading = false;     // ← added loading state
 
-  ATSResult ? atsResult;
-
-  File? selectedFile;
-
-  final TextEditingController jdController =
-      TextEditingController();
+  final TextEditingController jdController = TextEditingController();
 
   @override
   void dispose() {
@@ -39,39 +34,43 @@ class _DashboardScreenState
   Future<void> analyzeResume() async {
     if (selectedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Please select a resume first",
-          ),
-        ),
+        const SnackBar(content: Text("Please select a resume first")),
       );
       return;
     }
 
+    if (jdController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a job URL or JD text")),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+
     try {
-      final response =
-          await ApiService.uploadResume(
-        filePath: selectedFile!.path,
-        jdText: jdController.text,
+      final response = await ApiService.uploadResume(
+        file: selectedFile!, // ← passes PlatformFile directly
+        jdText: jdController.text.trim(),
       );
 
-      print(response);
+      setState(() {
+        atsResult = ATSResult.fromJson(response);
+      });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Resume analyzed successfully",
-          ),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Resume analyzed successfully")),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString(),
-          ),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
@@ -82,59 +81,45 @@ class _DashboardScreenState
       body: Stack(
         children: [
           const _AmbientBackground(),
-
           Row(
             children: [
               const _Sidebar(),
-
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const _TopBar(),
                       const SizedBox(height: 24),
-
                       Expanded(
                         child: Row(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.stretch,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-
                             Expanded(
                               flex: 2,
                               child: _UploadCard(
+                                selectedFile: selectedFile,
                                 onFileSelected: (file) {
-                                  setState(() {
-                                    selectedFile = file;
-                                  });
+                                  setState(() => selectedFile = file);
                                 },
                               ),
                             ),
-
                             const SizedBox(width: 20),
-
                             Expanded(
                               flex: 1,
                               child: Column(
                                 children: [
                                   Expanded(
                                     child: _JDCard(
-                                      controller:jdController,
-                                      onAnalyze:analyzeResume,
+                                      controller: jdController,
+                                      onAnalyze: analyzeResume,
+                                      isLoading: isLoading,
                                     ),
                                   ),
-
-                                  const SizedBox(
-                                    height: 20,
-                                  ),
-
+                                  const SizedBox(height: 20),
                                   Expanded(
-                                    child: _ATSCard(
-                                      atsResult: atsResult,
-                                    ),
+                                    child: _ATSCard(atsResult: atsResult),
                                   ),
                                 ],
                               ),
@@ -154,7 +139,7 @@ class _DashboardScreenState
   }
 }
 
-// ── Ambient background — two drifting amber orbs + dot grid ──────────────────
+// ── Ambient background ────────────────────────────────────────────────────────
 
 class _AmbientBackground extends StatefulWidget {
   const _AmbientBackground();
@@ -214,7 +199,7 @@ class _AmbientBackgroundState extends State<_AmbientBackground>
                 center: _orb1.value,
                 radius: 0.9,
                 colors: const [
-                  Color(0x28F59E0B), // amber at 16%
+                  Color(0x28F59E0B),
                   Colors.transparent,
                 ],
               ),
@@ -225,7 +210,7 @@ class _AmbientBackgroundState extends State<_AmbientBackground>
                   center: _orb2.value,
                   radius: 0.7,
                   colors: const [
-                    Color(0x1AD97706), // deep gold at 10%
+                    Color(0x1AD97706),
                     Colors.transparent,
                   ],
                 ),
@@ -242,23 +227,14 @@ class _AmbientBackgroundState extends State<_AmbientBackground>
   }
 }
 
-// ── Dot grid overlay painter ──────────────────────────────────────────────────
-
 class DotGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withOpacity(0.04);
-
+    final paint = Paint()..color = Colors.white.withOpacity(0.04);
     const spacing = 24.0;
-
     for (double x = 0; x < size.width; x += spacing) {
       for (double y = 0; y < size.height; y += spacing) {
-        canvas.drawCircle(
-          Offset(x, y),
-          1,
-          paint,
-        );
+        canvas.drawCircle(Offset(x, y), 1, paint);
       }
     }
   }
@@ -266,7 +242,6 @@ class DotGridPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
@@ -286,7 +261,6 @@ class _Sidebar extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 24),
-          // Logo mark
           Container(
             width: 36,
             height: 36,
@@ -324,7 +298,6 @@ class _SidebarIcon extends StatelessWidget {
     return Stack(
       alignment: Alignment.centerLeft,
       children: [
-        // Active amber indicator line on the left edge
         if (isActive)
           Positioned(
             left: 0,
@@ -348,7 +321,6 @@ class _SidebarIcon extends StatelessWidget {
     );
   }
 }
-
 
 // ── Top bar ───────────────────────────────────────────────────────────────────
 
@@ -413,8 +385,7 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-
-// ── Reusable glass card wrapper ───────────────────────────────────────────────
+// ── Glass card ────────────────────────────────────────────────────────────────
 
 class _GlassCard extends StatelessWidget {
   final Widget child;
@@ -441,180 +412,184 @@ class _GlassCard extends StatelessWidget {
     );
   }
 }
-// ── Resume Upload card ────────────────────────────────────────────────────────
+
+// ── Upload card ───────────────────────────────────────────────────────────────
+
 class _UploadCard extends StatelessWidget {
-  final Function(File file) onFileSelected;
+  final PlatformFile? selectedFile; // ← shows file name after selection
+  final Function(PlatformFile file) onFileSelected; // ← PlatformFile not File
 
   const _UploadCard({
-    super.key,
     required this.onFileSelected,
+    this.selectedFile,
   });
+
   @override
-  @override
-Widget build(BuildContext context) {
-  return _GlassCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(
-              Icons.upload_file_outlined,
-              color: AppTheme.amber,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Resume',
-              style: GoogleFonts.inter(
-                color: AppTheme.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.upload_file_outlined,
+                  color: AppTheme.amber, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Resume',
+                style: GoogleFonts.inter(
+                  color: AppTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 24),
-
-        Expanded(
-          child: DottedBorder(
-            color: AppTheme.amber,
-            dashPattern: const [8, 4],
-            borderType: BorderType.RRect,
-            radius: const Radius.circular(16),
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: AppTheme.amber.withOpacity(0.04),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: AppTheme.amberGlow,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.cloud_upload_outlined,
-                      color: AppTheme.amber,
-                      size: 28,
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  Text(
-                    'Drag your resume here',
+              // Show selected filename in the header
+              if (selectedFile != null) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    selectedFile!.name,
                     style: GoogleFonts.inter(
-                      color: AppTheme.textPrimary,
-                      fontSize: 15,
+                      color: AppTheme.amber,
+                      fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-
-                  const SizedBox(height: 4),
-
-                  Text(
-                    'PDF, DOCX, JPG, PNG',
-                    style: GoogleFonts.inter(
-                      color: AppTheme.textMuted,
-                      fontSize: 13,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  SizedBox(
-                    width: 140,
-                    child: OutlinedButton(
-                      onPressed: () async {
-                        final result =
-                            await FilePicker.platform.pickFiles(
-                          type: FileType.custom,
-                          allowedExtensions: [
-                            'pdf',
-                            'docx',
-                            'jpg',
-                            'png',
-                          ],
-                        );
-
-                        if (result != null) {
-                          final file = File(
-                            result.files.single.path!,
-                          );
-
-                          onFileSelected(file);
-                        }
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.amber,
-                        side: const BorderSide(
-                          color: AppTheme.amber,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: Text(
-                        'Browse files',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                ),
+              ],
+            ],
           ),
-        ),
-
-        const SizedBox(height: 16),
-
-        Row(
-          children: ['PDF', 'DOCX', 'JPG', 'PNG']
-              .map(
-                (type) => Padding(
-                  padding:
-                      const EdgeInsets.only(right: 8),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppTheme.glassWhite,
-                      borderRadius:
-                          BorderRadius.circular(6),
-                      border: Border.all(
-                        color: AppTheme.glassBorder,
+          const SizedBox(height: 24),
+          Expanded(
+            child: DottedBorder(
+              color: selectedFile != null
+                  ? AppTheme.amber
+                  : AppTheme.amber.withOpacity(0.5),
+              dashPattern: const [8, 4],
+              borderType: BorderType.RRect,
+              radius: const Radius.circular(16),
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: selectedFile != null
+                      ? AppTheme.amber.withOpacity(0.08)
+                      : AppTheme.amber.withOpacity(0.04),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: AppTheme.amberGlow,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        selectedFile != null
+                            ? Icons.check_circle_outline
+                            : Icons.cloud_upload_outlined,
+                        color: AppTheme.amber,
+                        size: 28,
                       ),
                     ),
-                    child: Text(
-                      type,
+                    const SizedBox(height: 16),
+                    Text(
+                      selectedFile != null
+                          ? 'File selected!'
+                          : 'Drag your resume here',
                       style: GoogleFonts.inter(
-                        color: AppTheme.textMuted,
-                        fontSize: 11,
+                        color: AppTheme.textPrimary,
+                        fontSize: 15,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      selectedFile != null
+                          ? selectedFile!.name
+                          : 'PDF, DOCX, JPG, PNG',
+                      style: GoogleFonts.inter(
+                        color: AppTheme.textMuted,
+                        fontSize: 13,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: 140,
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final result =
+                              await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: [
+                              'pdf',
+                              'docx',
+                              'jpg',
+                              'png',
+                            ],
+                            withData: true, // ← required for web
+                          );
+
+                          if (result != null &&
+                              result.files.isNotEmpty) {
+                            onFileSelected(result.files.first);
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.amber,
+                          side: const BorderSide(color: AppTheme.amber),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text(
+                          selectedFile != null
+                              ? 'Change file'
+                              : 'Browse files',
+                          style: GoogleFonts.inter(fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              )
-              .toList(),
-        ),
-      ],
-    ),
-  );
-}
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: ['PDF', 'DOCX', 'JPG', 'PNG']
+                .map(
+                  (type) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.glassWhite,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppTheme.glassBorder),
+                      ),
+                      child: Text(
+                        type,
+                        style: GoogleFonts.inter(
+                          color: AppTheme.textMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ── Job Description card ──────────────────────────────────────────────────────
@@ -622,12 +597,14 @@ Widget build(BuildContext context) {
 class _JDCard extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onAnalyze;
+  final bool isLoading; // ← added loading state
 
   const _JDCard({
-    super.key,
     required this.controller,
     required this.onAnalyze,
+    required this.isLoading,
   });
+
   @override
   Widget build(BuildContext context) {
     return _GlassCard(
@@ -637,11 +614,7 @@ class _JDCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.link,
-                color: AppTheme.amber,
-                size: 18,
-              ),
+              const Icon(Icons.link, color: AppTheme.amber, size: 18),
               const SizedBox(width: 8),
               Text(
                 'Job Description',
@@ -653,16 +626,12 @@ class _JDCard extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 14),
-
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
+                    horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: AppTheme.amber,
                   borderRadius: BorderRadius.circular(8),
@@ -675,30 +644,22 @@ class _JDCard extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(width: 8),
-
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
+                    horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: AppTheme.glassWhite,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Text(
                   'Text Area',
-                  style: TextStyle(
-                    color: Colors.white,
-                  ),
+                  style: TextStyle(color: Colors.white),
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
           TextField(
             controller: controller,
             style: GoogleFonts.inter(
@@ -714,19 +675,24 @@ class _JDCard extends StatelessWidget {
               ),
             ),
           ),
-
           const Spacer(),
-
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed:onAnalyze,
-              child: Text(
-                'Analyze Resume',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              onPressed: isLoading ? null : onAnalyze, // ← disabled while loading
+              child: isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black,
+                      ),
+                    )
+                  : Text(
+                      'Analyze Resume',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                    ),
             ),
           ),
         ],
@@ -740,132 +706,136 @@ class _JDCard extends StatelessWidget {
 class _ATSCard extends StatelessWidget {
   final ATSResult? atsResult;
 
-  const _ATSCard({
-    super.key,
-    required this.atsResult,
-  });
+  const _ATSCard({required this.atsResult});
 
   String get verdict {
     final score = atsResult?.finalScore ?? 0;
-
-    if (score >= 80) {
-      return "Excellent Match";
-    }
-
-    if (score >= 65) {
-      return "Good Match";
-    }
-
-    if (score >= 50) {
-      return "Average Match";
-    }
-
+    if (score >= 80) return "Excellent Match";
+    if (score >= 65) return "Good Match";
+    if (score >= 50) return "Average Match";
     return "Poor Match";
+  }
+
+  Color get verdictColor {
+    final score = atsResult?.finalScore ?? 0;
+    if (score >= 80) return const Color(0xFF10B981); // green
+    if (score >= 65) return AppTheme.amber;
+    if (score >= 50) return const Color(0xFFF59E0B);
+    return const Color(0xFFEF4444); // red
   }
 
   @override
   Widget build(BuildContext context) {
     return _GlassCard(
       padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.analytics_outlined,
-                  color: AppTheme.amber, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'ATS Score',
-                style: GoogleFonts.inter(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+      child: SingleChildScrollView( // ← fixes the 149px overflow
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.analytics_outlined,
+                    color: AppTheme.amber, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'ATS Score',
+                  style: GoogleFonts.inter(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              const Spacer(),
-              Text(
-                '${atsResult?.finalScore.toStringAsFixed(0) ?? 0}/100',
-                style: GoogleFonts.inter(
-                  color: AppTheme.amber,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                const Spacer(),
+                Text(
+                  '${atsResult?.finalScore.toStringAsFixed(0) ?? 0}/100',
+                  style: GoogleFonts.inter(
+                    color: AppTheme.amber,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          // Circular ATS score dial
-          Center(
-            child: SizedBox(
-              width: 120,
-              height: 120,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 120,
-                    height: 120,
-                    child: CircularProgressIndicator(
-                      value: (atsResult?.finalScore ?? 0) / 100,
-                      strokeWidth: 10,
-                      backgroundColor: AppTheme.glassWhite,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppTheme.amber,
+              ],
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: SizedBox(
+                width: 120,
+                height: 120,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 120,
+                      height: 120,
+                      child: CircularProgressIndicator(
+                        value: (atsResult?.finalScore ?? 0) / 100,
+                        strokeWidth: 10,
+                        backgroundColor: AppTheme.glassWhite,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          verdictColor, // ← color changes with score
+                        ),
                       ),
                     ),
-                  ),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '${atsResult?.finalScore.toStringAsFixed(0) ?? 0}',
-                        style: GoogleFonts.inter(
-                          color: AppTheme.textPrimary,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${atsResult?.finalScore.toStringAsFixed(0) ?? 0}',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textPrimary,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      Text(
-                        'ATS Score',
-                        style: GoogleFonts.inter(
-                          color: AppTheme.textMuted,
-                          fontSize: 12,
+                        Text(
+                          'ATS Score',
+                          style: GoogleFonts.inter(
+                            color: AppTheme.textMuted,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                color: AppTheme.amber.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                verdict,
-                style: GoogleFonts.inter(
-                  color: AppTheme.amber,
-                  fontWeight: FontWeight.w600,
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          _ScoreBar(label: 'JD Match', value: (atsResult?.matchRate??0)/100),
-          const SizedBox(height: 10),
-          _ScoreBar(label: 'Format', value: (atsResult?.similarityScore??0)/100),
-          const SizedBox(height: 10),
-          _ScoreBar(label: 'Keywords', value: (atsResult?.matchRate??0)/100),
-        ],
+            const SizedBox(height: 16),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: verdictColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  verdict,
+                  style: GoogleFonts.inter(
+                    color: verdictColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            _ScoreBar(
+              label: 'JD Match',
+              value: (atsResult?.matchRate ?? 0) / 100,
+            ),
+            const SizedBox(height: 10),
+            _ScoreBar(
+              label: 'Similarity',
+              value: (atsResult?.similarityScore ?? 0) / 100,
+            ),
+            const SizedBox(height: 10),
+            _ScoreBar(
+              label: 'Keywords',
+              value: (atsResult?.matchRate ?? 0) / 100,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -873,7 +843,7 @@ class _ATSCard extends StatelessWidget {
 
 class _ScoreBar extends StatelessWidget {
   final String label;
-  final double value; // 0.0 to 1.0
+  final double value;
 
   const _ScoreBar({required this.label, required this.value});
 
@@ -908,7 +878,8 @@ class _ScoreBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: value,
             backgroundColor: AppTheme.glassWhite,
-            valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.amber),
+            valueColor:
+                const AlwaysStoppedAnimation<Color>(AppTheme.amber),
             minHeight: 6,
           ),
         ),

@@ -1,25 +1,36 @@
 // lib/services/api_service.dart
 
 import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
   static const String baseUrl = "http://127.0.0.1:8000";
-
-  // How long to wait before giving up on a request
   static const Duration _timeout = Duration(seconds: 60);
 
   static Future<Map<String, dynamic>> uploadResume({
-    required String filePath,
+    required PlatformFile file, // ← PlatformFile not String path (web compatible)
     String? jdUrl,
     String? jdText,
   }) async {
-    final uri = Uri.parse("$baseUrl/resume/upload-resume"); // ← fixed path
+    final uri = Uri.parse("$baseUrl/resume/upload-resume");
 
     var request = http.MultipartRequest("POST", uri);
 
+    // fromBytes works on web AND mobile — fromPath crashes on web
+    final bytes = file.bytes;
+    if (bytes == null) {
+      throw Exception(
+        "Could not read file bytes. Try selecting the file again.",
+      );
+    }
+
     request.files.add(
-      await http.MultipartFile.fromPath("resume", filePath),
+      http.MultipartFile.fromBytes(
+        "resume",
+        bytes,
+        filename: file.name,
+      ),
     );
 
     if (jdUrl != null && jdUrl.isNotEmpty) {
@@ -30,7 +41,6 @@ class ApiService {
     }
 
     try {
-      // Send with timeout — OCR on images can be slow
       final streamedResponse = await request.send().timeout(
         _timeout,
         onTimeout: () => throw Exception(
@@ -41,28 +51,21 @@ class ApiService {
 
       final responseBody = await streamedResponse.stream.bytesToString();
 
-      // Check status code before decoding
       if (streamedResponse.statusCode == 200) {
         return jsonDecode(responseBody) as Map<String, dynamic>;
       }
 
-      // Try to parse the error detail from FastAPI's error response format
-      // FastAPI returns: { "detail": "..." } on errors
       Map<String, dynamic> errorJson = {};
       try {
         errorJson = jsonDecode(responseBody) as Map<String, dynamic>;
-      } catch (_) {
-        // response body wasn't valid JSON — use raw text
-      }
+      } catch (_) {}
 
       final detail = errorJson['detail'] ?? responseBody;
-
       throw Exception(
         "Upload failed (HTTP ${streamedResponse.statusCode}): $detail",
       );
-
     } on Exception {
-      rethrow; // let the caller (provider/screen) handle and show the error
+      rethrow;
     }
   }
 }
