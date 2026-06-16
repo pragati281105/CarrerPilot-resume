@@ -1,12 +1,9 @@
-//ats_resut.dart
 class ATSResult {
   final double finalScore;
   final double similarityScore;
   final double matchRate;
-
   final String verdict;
   final String recommendation;
-
   final List<dynamic> missingKeywords;
   final List<dynamic> matchedKeywords;
   final List<dynamic> atsIssues;
@@ -34,4 +31,15 @@ class ATSResult {
       atsIssues: json["ats_issues"] ?? [],
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'final_score': finalScore,
+    'similarity_score': similarityScore,
+    'match_rate': matchRate,
+    'verdict': verdict,
+    'recommendation': recommendation,
+    'missing_keywords': missingKeywords,
+    'matched_keywords': matchedKeywords,
+    'ats_issues': atsIssues,
+  };
 }

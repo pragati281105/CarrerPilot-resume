@@ -119,7 +119,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                   const SizedBox(height: 20),
                                   Expanded(
-                                    child: _ATSCard(atsResult: atsResult),
+                                    child: _ATSCard(atsData: atsResult?.toJson()),
                                   ),
                                 ],
                               ),
@@ -701,139 +701,144 @@ class _JDCard extends StatelessWidget {
   }
 }
 
-// ── ATS Score card ────────────────────────────────────────────────────────────
-
+// ── ATS Score Card (Fixed - Null Safe) ───────────────────────────────────────
 class _ATSCard extends StatelessWidget {
-  final ATSResult? atsResult;
+  final Map<String, dynamic>? atsData;
 
-  const _ATSCard({required this.atsResult});
-
-  String get verdict {
-    final score = atsResult?.finalScore ?? 0;
-    if (score >= 80) return "Excellent Match";
-    if (score >= 65) return "Good Match";
-    if (score >= 50) return "Average Match";
-    return "Poor Match";
-  }
-
-  Color get verdictColor {
-    final score = atsResult?.finalScore ?? 0;
-    if (score >= 80) return const Color(0xFF10B981); // green
-    if (score >= 65) return AppTheme.amber;
-    if (score >= 50) return const Color(0xFFF59E0B);
-    return const Color(0xFFEF4444); // red
-  }
+  const _ATSCard({super.key, this.atsData});
 
   @override
   Widget build(BuildContext context) {
+    // Show placeholder when no data
+    if (atsData == null || atsData!.isEmpty) {
+      return _GlassCard(
+        padding: const EdgeInsets.all(20),
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.analytics_outlined, size: 48, color: Colors.white38),
+              SizedBox(height: 16),
+              Text(
+                "ATS Score will appear here",
+                style: TextStyle(color: Colors.white54, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Safe extraction with fallbacks
+    final score = (atsData!['final_score'] ??
+                   atsData!['finalScore'] ??
+                   atsData!['similarity_score'] ?? 0).toDouble();
+
+    final verdict = (atsData!['verdict'] ?? 'Poor Match').toString();
+    final missing = atsData!['missing_keywords'] ??
+                    atsData!['missingKeywords'] ?? [];
+
+    // Dynamic color
+    Color scoreColor = AppTheme.danger;
+    if (score >= 80) {
+      scoreColor = const Color(0xFF10B981); // green
+    } else if (score >= 60) {
+      scoreColor = AppTheme.amber;
+    }
+
     return _GlassCard(
       padding: const EdgeInsets.all(20),
-      child: SingleChildScrollView( // ← fixes the 149px overflow
+      child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(Icons.analytics_outlined,
-                    color: AppTheme.amber, size: 18),
+                const Icon(Icons.analytics_outlined, color: AppTheme.amber, size: 18),
                 const SizedBox(width: 8),
-                Text(
-                  'ATS Score',
-                  style: GoogleFonts.inter(
-                    color: AppTheme.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                Text('ATS Score',
+                    style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600)),
                 const Spacer(),
-                Text(
-                  '${atsResult?.finalScore.toStringAsFixed(0) ?? 0}/100',
-                  style: GoogleFonts.inter(
-                    color: AppTheme.amber,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                Text('${score.toStringAsFixed(0)}/100',
+                    style: GoogleFonts.inter(
+                        fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.amber)),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
+
+            // Circular Progress
             Center(
               child: SizedBox(
-                width: 120,
-                height: 120,
+                width: 135,
+                height: 135,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    SizedBox(
-                      width: 120,
-                      height: 120,
-                      child: CircularProgressIndicator(
-                        value: (atsResult?.finalScore ?? 0) / 100,
-                        strokeWidth: 10,
-                        backgroundColor: AppTheme.glassWhite,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          verdictColor, // ← color changes with score
-                        ),
-                      ),
+                    CircularProgressIndicator(
+                      value: score / 100,
+                      strokeWidth: 13,
+                      backgroundColor: AppTheme.glassBorder,
+                      valueColor: AlwaysStoppedAnimation<Color>(scoreColor),
                     ),
                     Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '${atsResult?.finalScore.toStringAsFixed(0) ?? 0}',
+                          score.toStringAsFixed(0),
                           style: GoogleFonts.inter(
-                            color: AppTheme.textPrimary,
-                            fontSize: 28,
+                            fontSize: 42,
                             fontWeight: FontWeight.w700,
+                            color: Colors.white,
                           ),
                         ),
-                        Text(
-                          'ATS Score',
-                          style: GoogleFonts.inter(
-                            color: AppTheme.textMuted,
-                            fontSize: 12,
-                          ),
-                        ),
+                        Text("Score", style: GoogleFonts.inter(fontSize: 13, color: Colors.white70)),
                       ],
                     ),
                   ],
                 ),
               ),
             ),
+
             const SizedBox(height: 16),
+
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 decoration: BoxDecoration(
-                  color: verdictColor.withOpacity(0.15),
+                  color: scoreColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   verdict,
                   style: GoogleFonts.inter(
-                    color: verdictColor,
+                    color: scoreColor,
                     fontWeight: FontWeight.w600,
-                    fontSize: 13,
+                    fontSize: 14,
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            _ScoreBar(
-              label: 'JD Match',
-              value: (atsResult?.matchRate ?? 0) / 100,
-            ),
-            const SizedBox(height: 10),
-            _ScoreBar(
-              label: 'Similarity',
-              value: (atsResult?.similarityScore ?? 0) / 100,
-            ),
-            const SizedBox(height: 10),
-            _ScoreBar(
-              label: 'Keywords',
-              value: (atsResult?.matchRate ?? 0) / 100,
-            ),
+
+            if (missing.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Text(
+                "Missing Keywords",
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: missing.take(8).map<Widget>((keyword) => Chip(
+                  label: Text(keyword.toString()),
+                  backgroundColor: AppTheme.danger.withOpacity(0.15),
+                  labelStyle: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                )).toList(),
+              ),
+            ],
           ],
         ),
       ),
