@@ -1,7 +1,10 @@
-﻿from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+﻿import os
 import re
-import numpy as np
+from groq import Groq
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 
 def preprocess(text: str) -> str:
@@ -14,6 +17,18 @@ def preprocess(text: str) -> str:
     return text
 
 
+def tfidf_fallback(resume_text: str, jd_text: str) -> float:
+    vectorizer = TfidfVectorizer()
+    tfidf = vectorizer.fit_transform([
+        preprocess(resume_text),
+        preprocess(jd_text)
+    ])
+    score = float(
+        cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
+    ) * 100
+    return round(max(0.0, min(score, 100.0)), 2)
+
+
 def calculate_similarity(
     resume_text: str,
     jd_text: str,
@@ -22,17 +37,31 @@ def calculate_similarity(
 ) -> float:
     if not resume_text.strip() or not jd_text.strip():
         raise ValueError(
-            "Both resume_text and jd_text must be non-empty strings."
+            "Both resume_text and jd_text must be non-empty."
         )
+    try:
+        prompt = f"""
+You are a senior technical recruiter.
+Compare this resume against the job description.
+Return ONLY a single float number between 0 and 100 representing
+how semantically similar the resume is to the JD.
+No explanation. No JSON. Just the number.
 
-    clean_resume = preprocess(resume_text)
-    clean_jd = preprocess(jd_text)
+RESUME:
+{resume_text[:3000]}
 
-    vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform([clean_resume, clean_jd])
-
-    score = float(
-        cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
-    ) * 100
-
-    return round(max(0.0, min(score, 100.0)), 2)
+JOB DESCRIPTION:
+{jd_text[:2000]}
+"""
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=10,
+        )
+        raw = response.choices[0].message.content.strip()
+        score = float(re.sub(r"[^\d.]", "", raw))
+        return round(max(0.0, min(score, 100.0)), 2)
+    except Exception as e:
+        print(f"Groq similarity failed: {e}. Using TF-IDF fallback.")
+        return tfidf_fallback(resume_text, jd_text)
